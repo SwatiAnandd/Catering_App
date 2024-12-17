@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Catering Reservation and Ordering System</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+
+        h1, h2, h3 {
+            text-align: center;
+        }
+
+        #app {
+            max-width: 900px;
+            margin: 20px auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        input, button {
+            padding: 10px;
+            margin: 5px 0;
+            width: calc(100% - 20px);
+            box-sizing: border-box;
+        }
+
+        input {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        button {
+            background-color: #007BFF;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        #auth-section, #admin-section, #user-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        ul li {
+            background: #f9f9f9;
+            margin: 5px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        ul li button {
+            margin-left: 10px;
+            width: auto;
+        }
+
+        #cart-total {
+            text-align: right;
+            font-size: 18px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        @media (max-width: 600px) {
+            input, button {
+                width: 100%;
+            }
+        }
+    </style>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.17.2/firebase-app.js";
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.17.2/firebase-auth.js";
+        import { getDatabase, ref, set, onValue, push } from "https://www.gstatic.com/firebasejs/9.17.2/firebase-database.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyC49ENFBfI05CkMsxsChkCbas2rLw-7SY4",
+            authDomain: "catering-system-f57cc.firebaseapp.com",
+            projectId: "catering-system-f57cc",
+            
+            storageBucket: "catering-system-f57cc.appspot.com",
+            messagingSenderId: "607529219565",
+            appId: "1:607529219565:web:47a2e0af73f43abbb2a3e4"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getDatabase(app);
+
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
+        const registerBtn = document.getElementById('register-btn');
+        const loginBtn = document.getElementById('login-btn');
+        const logoutBtn = document.getElementById('logout-btn');
+        const authSection = document.getElementById('auth-section');
+
+        const adminSection = document.getElementById('admin-section');
+        const userSection = document.getElementById('user-section');
+        const productNameInput = document.getElementById('product-name');
+        const productPriceInput = document.getElementById('product-price');
+        const addProductBtn = document.getElementById('add-product-btn');
+        const productList = document.getElementById('product-list');
+        const cartList = document.getElementById('cart-list');
+        const cartTotalDisplay = document.getElementById('cart-total');
+        const orderList = document.getElementById('order-list');
+        const placeOrderBtn = document.createElement('button');
+        placeOrderBtn.textContent = 'Place Order';
+        placeOrderBtn.style.display = 'block';
+        userSection.appendChild(placeOrderBtn);
+
+        let cart = [];
+
+        function updateUI(user) {
+            if (user) {
+                authSection.classList.add('hidden');
+                logoutBtn.classList.remove('hidden');
+                if (user.email === 'admin@example.com') {
+                    adminSection.classList.remove('hidden');
+                    userSection.classList.add('hidden');
+                } else {
+                    adminSection.classList.add('hidden');
+                    userSection.classList.remove('hidden');
+                    loadProducts();
+                }
+            } else {
+                authSection.classList.remove('hidden');
+                logoutBtn.classList.add('hidden');
+                adminSection.classList.add('hidden');
+                userSection.classList.add('hidden');
+            }
+        }
+
+        onAuthStateChanged(auth, updateUI);
+
+        registerBtn.addEventListener('click', () => {
+            const email = emailInput.value;
+            const password = passwordInput.value;
+            createUserWithEmailAndPassword(auth, email, password)
+                .then(() => alert('Registered successfully!'))
+                .catch(error => console.error(error));
+        });
+
+        loginBtn.addEventListener('click', () => {
+            const email = emailInput.value;
+            const password = passwordInput.value;
+            signInWithEmailAndPassword(auth, email, password)
+                .catch(error => console.error(error));
+        });
+
+        logoutBtn.addEventListener('click', () => {
+            signOut(auth).then(() => alert('Logged out successfully!'));
+        });
+
+        addProductBtn.addEventListener('click', () => {
+            const productName = productNameInput.value;
+            const productPrice = parseFloat(productPriceInput.value);
+            const productId = push(ref(db, 'products')).key;
+            set(ref(db, 'products/' + productId), { name: productName, price: productPrice })
+                .then(() => alert('Product added successfully!'));
+        });
+
+        function loadProducts() {
+            onValue(ref(db, 'products'), snapshot => {
+                productList.innerHTML = '';
+                snapshot.forEach(childSnapshot => {
+                    const product = childSnapshot.val();
+                    const li = document.createElement('li');
+                    li.textContent = `${product.name} - $${product.price}`;
+                    const addToCartBtn = document.createElement('button');
+                    addToCartBtn.textContent = 'Add to Cart';
+                    addToCartBtn.addEventListener('click', () => {
+                        cart.push(product);
+                        updateCart();
+                    });
+                    li.appendChild(addToCartBtn);
+                    productList.appendChild(li);
+                });
+            });
+        }
+
+        function updateCart() {
+            cartList.innerHTML = '';
+            let total = 0;
+            cart.forEach((product, index) => {
+                const li = document.createElement('li');
+                li.textContent = `${product.name} - $${product.price}`;
+                total += product.price;
+                const removeBtn = document.createElement('button');
+                removeBtn.textContent = 'Remove';
+                removeBtn.addEventListener('click', () => {
+                    cart.splice(index, 1);
+                    updateCart();
+                });
+                li.appendChild(removeBtn);
+                cartList.appendChild(li);
+            });
+            cartTotalDisplay.textContent = `Total: $${total.toFixed(2)}`;
+        }
+
+        placeOrderBtn.addEventListener('click', () => {
+            const orderId = push(ref(db, 'orders')).key;
+            set(ref(db, 'orders/' + orderId), {
+                items: cart,
+                user: auth.currentUser.email
+            }).then(() => {
+                alert('Order placed successfully!');
+                cart = [];
+                updateCart();
+            });
+        });
+    </script>
+</head>
+<body>
+    <div id="app">
+        <h1>Welcome to Catering Reservation System</h1>
+        <div id="auth-section">
+            <h2>Login / Register</h2>
+            <input type="email" id="email" placeholder="Enter Email">
+            <input type="password" id="password" placeholder="Enter Password">
+            <button id="register-btn">Register</button>
+            <button id="login-btn">Login</button>
+        </div>
+        <button id="logout-btn" class="hidden">Logout</button>
+
+        <div id="admin-section" class="hidden">
+            <h2>Admin Panel</h2>
+            <input type="text" id="product-name" placeholder="Product Name">
+            <input type="number" id="product-price" placeholder="Product Price">
+            <button id="add-product-btn">Add Product</button>
+            <h3>Orders</h3>
+            <ul id="order-list"></ul>
+        </div>
+
+        <div id="user-section" class="hidden">
+            <h2>Products</h2>
+            <ul id="product-list"></ul>
+            <h3>Cart</h3>
+            <ul id="cart-list"></ul>
+            <p id="cart-total">Total: $0.00</p>
+        </div>
+    </div>
+</body>
+</html>
